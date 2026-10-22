@@ -1,0 +1,401 @@
+#!/usr/bin/env python
+"""Command-line client for a personal to-do and PR list.
+
+Reads the API token from $PERSONAL_TOKEN or ~/.config/personal/token, and the
+rest from ~/.config/personal/config.json:
+
+    {"url": "https://...", "emails": ["me@example.com"], "freedesktop_username": "me"}
+
+$PERSONAL_URL, $MY_EMAILS (comma-separated) and $FREEDESKTOP_USERNAME override it.
+"""
+
+import argparse
+import datetime
+import email
+import email.policy
+import email.utils
+import gzip
+import json
+import os
+import re
+import socket
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+CONFIG_PATH = os.path.expanduser("~/.config/personal/config.json")
+try:
+    with open(CONFIG_PATH) as f:
+        CONFIG = json.load(f)
+except FileNotFoundError:
+    CONFIG = {}
+
+BASE = (os.environ.get("PERSONAL_URL") or CONFIG.get("url") or "").rstrip("/")
+MY_EMAILS = [e.strip().lower() for e in os.environ["MY_EMAILS"].split(",")] if os.environ.get("MY_EMAILS") else [e.lower() for e in CONFIG.get("emails", [])]
+FREEDESKTOP_USERNAME = (os.environ.get("FREEDESKTOP_USERNAME") or CONFIG.get("freedesktop_username") or "").lower()
+PRIORITY = {"now": 1, "normal": 0, "later": -1}
+PRIORITY_NAME = {v: k for k, v in PRIORITY.items()}
+
+
+def token():
+    if os.environ.get("PERSONAL_TOKEN"):
+        return os.environ["PERSONAL_TOKEN"].strip()
+    path = os.path.expanduser("~/.config/personal/token")
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        sys.exit(f"personal: no token. Put it in {path} or $PERSONAL_TOKEN")
+
+
+def agent():
+    if os.environ.get("PERSONAL_AGENT"):
+        return os.environ["PERSONAL_AGENT"]
+    host = socket.gethostname()
+    return f"{host}/claude" if os.environ.get("CLAUDECODE") else host
+
+
+def call(method, path, data=None, timeout=60):
+    if not BASE:
+        sys.exit(f"personal: no site URL. Put it in {CONFIG_PATH} or $PERSONAL_URL")
+    req = urllib.request.Request(
+        BASE + path,
+        method=method,
+        data=None if data is None else json.dumps(data).encode(),
+        headers={
+            "Authorization": f"Bearer {token()}",
+            # Cloudflare's browser integrity check refuses Python-urllib
+            "User-Agent": "personal-cli/1.0",
+            "X-Agent": agent(),
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            return json.load(res)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")
+        try:
+            msg = json.loads(body)["error"]
+        except (ValueError, KeyError, TypeError):
+            msg = body.strip() or e.reason
+        sys.exit(f"personal: {e.code} {msg}")
+    except urllib.error.URLError as e:
+        sys.exit(f"personal: can't reach {BASE}: {e.reason}")
+
+
+def item_path(key):
+    return "/api/items/" + urllib.parse.quote(str(key), safe="")
+
+
+def line(i):
+    bits = [f"#{i['id']:<4}"]
+    if i["kind"] == "pr":
+        bits.append(f"[{i['state']}{', my move' if i['move'] == 'me' else ''}]")
+    elif i["state"] == "done":
+        bits.append("[done]")
+    if i["priority"] != 0:
+        bits.append(f"({PRIORITY_NAME[i['priority']]})")
+    if i.get("ref"):
+        bits.append(i["ref"])
+    bits.append(i["title"])
+    extra = [x for x in (i["area"], i["host"], i["due"] and f"due {i['due']}") if x]
+    if extra:
+        bits.append("· " + ", ".join(extra))
+    out = " ".join(bits)
+    if i.get("news"):
+        out += "\n       NEW: " + i["news"].split("\n")[0]
+    return out
+
+
+def show(i):
+    print(line(i))
+    if i.get("url"):
+        print(f"       {i['url']}")
+    if i["notes"]:
+        print()
+        print(i["notes"])
+    if i.get("log"):
+        print()
+        for entry in i["log"][:10]:
+            print(f"  {entry['at'][:16].replace('T', ' ')}  {entry['who']}: {entry['text']}")
+
+
+def fields(args):
+    out = {}
+    for key in ("title", "notes", "area", "host", "due", "url", "state", "move"):
+        v = getattr(args, key, None)
+        if v is not None:
+            out[key] = v
+    if getattr(args, "priority", None):
+        out["priority"] = PRIORITY[args.priority]
+    return out
+
+
+def emit(args, data, text):
+    if args.json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+    else:
+        text(data)
+
+
+def cmd_ls(args):
+    q = {}
+    if args.kind:
+        q["kind"] = args.kind
+    if args.area is not None:
+        q["area"] = args.area
+    if args.search:
+        q["q"] = args.search
+    if args.all:
+        q["all"] = "1"
+    items = call("GET", "/api/items?" + urllib.parse.urlencode(q))
+    if args.mine:
+        items = [i for i in items if i["news"] or i["move"] == "me" or i["priority"] == 1]
+    emit(args, items, lambda xs: print("\n".join(line(i) for i in xs) or "nothing"))
+
+
+def cmd_show(args):
+    emit(args, call("GET", item_path(args.id)), show)
+
+
+def cmd_add(args):
+    data = fields(args)
+    data["kind"] = "pr" if args.pr or args.url else "todo"
+    if args.pr and not args.url:
+        data.setdefault("state", "unsent")
+    item = call("POST", "/api/items", data)
+    emit(args, item, lambda i: print(line(i)))
+
+
+def cmd_set(args):
+    data = fields(args)
+    if args.log:
+        data["log"] = args.log
+    if not data:
+        sys.exit("personal: nothing to change")
+    emit(args, call("PATCH", item_path(args.id), data), lambda i: print(line(i)))
+
+
+def cmd_done(args):
+    cur = call("GET", item_path(args.id))
+    state = "done" if cur["kind"] == "todo" else args.state or "merged"
+    data = {"state": state}
+    if args.log:
+        data["log"] = args.log
+    emit(args, call("PATCH", item_path(args.id), data), lambda i: print(line(i)))
+
+
+def cmd_log(args):
+    call("POST", item_path(args.id), {"text": args.text})
+
+
+def cmd_seen(args):
+    emit(args, call("PATCH", item_path(args.id), {"news": None}), lambda i: print(line(i)))
+
+
+def cmd_rm(args):
+    call("DELETE", item_path(args.id))
+
+
+def cmd_areas(args):
+    if args.name:
+        data = {}
+        if args.notes is not None:
+            data["notes"] = args.notes
+        if args.rename:
+            data["rename"] = args.rename
+        if args.sort is not None:
+            data["sort"] = args.sort
+        res = call("PUT", "/api/areas/" + urllib.parse.quote(args.name, safe=""), data)
+        emit(args, res, lambda a: print(f"{a['name']}\n{a['notes']}"))
+        return
+    emit(args, call("GET", "/api/areas"), lambda xs: print("\n".join(a["name"] for a in xs)))
+
+
+def cmd_check(args):
+    res = call("POST", "/api/check", timeout=300)
+
+    def text(r):
+        print(f"checked {r['checked']}, changed {len(r['changed'])}")
+        for c in r["changed"]:
+            print(f"  #{c['id']} {c['ref'] or ''}: {c['news']}")
+        for e in r["errors"]:
+            print(f"  error #{e['id']} {e['ref'] or ''}: {e['error']}")
+
+    emit(args, res, text)
+
+
+# The Worker reads lore over NNTP itself; sourceware has no NNTP server.
+MAIL_URL = re.compile(r"^(https://inbox\.sourceware\.org)/([^/]+)/([^/]+@[^/]+)")
+GITLAB_URL = re.compile(r"^https://(gitlab\.[^/]+)/(.+?)/-/merge_requests/(\d+)")
+
+
+def fetch(url, headers=None):
+    req = urllib.request.Request(url, headers={"User-Agent": "b4/0.14", **(headers or {})})
+    with urllib.request.urlopen(req, timeout=timeout) as res:
+        return res.read(), res.headers.get("Content-Type", "")
+
+
+def watch_gitlab(m):
+    host, project, iid = m.groups()
+    base = f"https://{host}/api/v4/projects/{urllib.parse.quote(project, safe='')}/merge_requests/{iid}"
+    headers = {}
+    if host == "gitlab.freedesktop.org" and os.environ.get("FREEDESKTOP_TOKEN"):
+        headers["PRIVATE-TOKEN"] = os.environ["FREEDESKTOP_TOKEN"]
+    mr = json.loads(fetch(base, headers)[0])
+    out = {
+        "state": {"merged": "merged", "opened": "open"}.get(mr["state"], "closed"),
+        "draft": mr.get("draft"),
+        "conflicts": mr.get("has_conflicts"),
+        "checks": (mr.get("head_pipeline") or {}).get("status"),
+        "count": mr.get("user_notes_count"),
+        "activity": [],
+    }
+    if headers and mr.get("user_notes_count"):
+        notes = json.loads(fetch(f"{base}/notes?sort=desc&order_by=created_at&per_page=20", headers)[0])
+        out["activity"] = [
+            {"author": n["author"]["username"], "at": n["created_at"], "text": n["body"]}
+            for n in reversed(notes)
+            if not n["system"] and not n["author"].get("bot") and n["author"]["username"].lower() != FREEDESKTOP_USERNAME
+        ]
+    return out
+
+
+def watch_mail(m):
+    base, inbox, msgid = m.groups()
+    raw = gzip.decompress(fetch(f"{base}/{inbox}/{msgid}/t.mbox.gz")[0]).decode("utf-8", "replace")
+    activity = []
+    for chunk in re.split(r"^From mboxrd@z .*\n", raw, flags=re.M):
+        if not chunk.strip():
+            continue
+        msg = email.message_from_string(chunk, policy=email.policy.default)
+        sender = str(msg.get("From", ""))
+        if not sender or any(e in sender.lower() for e in MY_EMAILS):
+            continue
+        try:
+            at = email.utils.parsedate_to_datetime(str(msg["Date"])).astimezone(datetime.timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        part = msg.get_body(preferencelist=("plain",))
+        text = part.get_content() if part else ""
+        text = "\n".join(l for l in text.splitlines() if not l.startswith(">"))
+        name = email.utils.parseaddr(sender)[0] or sender
+        activity.append({"author": name, "at": at.isoformat(), "text": f"Subject: {msg['Subject']}\n{text[:3000]}"})
+    return {"state": "open", "activity": activity}
+
+
+def cmd_watch(args):
+    items = call("GET", "/api/items?kind=pr")
+    results, failed = {}, []
+    for i in items:
+        if i["state"] != "open" or not i.get("url"):
+            continue
+        try:
+            if m := GITLAB_URL.match(i["url"]):
+                results[str(i["id"])] = watch_gitlab(m)
+            elif m := MAIL_URL.match(i["url"]):
+                results[str(i["id"])] = watch_mail(m)
+        except Exception as e:  # one bad thread shouldn't stop the rest
+            failed.append(f"  error #{i['id']} {i.get('ref') or i['url']}: {e}")
+    res = call("POST", "/api/watch", {"results": results})
+
+    def text(r):
+        print(f"checked {r['checked']} GitLab and sourceware items, changed {len(r['changed'])}")
+        for c in r["changed"]:
+            print(f"  #{c['id']} {c['ref'] or ''}: {c['news']}")
+        for e in r["errors"]:
+            print(f"  error #{e['id']} {e['ref'] or ''}: {e['error']}")
+        if failed:
+            print("\n".join(failed))
+
+    emit(args, res, text)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="personal", description=__doc__.split("\n")[0])
+    p.add_argument("--json", action="store_true", help="print raw JSON")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="print raw JSON")
+    sub = p.add_subparsers(dest="cmd", required=True)
+    add_parser = sub.add_parser
+    sub.add_parser = lambda *a, **kw: add_parser(*a, parents=[common], **kw)
+
+    def item_fields(sp, title=True):
+        if title:
+            sp.add_argument("--title")
+        sp.add_argument("--notes")
+        sp.add_argument("--area")
+        sp.add_argument("--host")
+        sp.add_argument("--due", help="YYYY-MM-DD, empty to clear")
+        sp.add_argument("--priority", choices=PRIORITY)
+        sp.add_argument("--url")
+
+    s = sub.add_parser("ls", help="list open items")
+    s.add_argument("--kind", choices=["todo", "pr"])
+    s.add_argument("--area")
+    s.add_argument("-s", "--search")
+    s.add_argument("--all", action="store_true", help="include done, merged and closed")
+    s.add_argument("--mine", action="store_true", help="only what needs me")
+    s.set_defaults(fn=cmd_ls)
+
+    s = sub.add_parser("show", help="show one item with notes and history")
+    s.add_argument("id", help="id, ref like voxtype#903, or URL")
+    s.set_defaults(fn=cmd_show)
+
+    s = sub.add_parser("add", help="add a to-do, or a PR with --pr/--url")
+    s.add_argument("title")
+    s.add_argument("--pr", action="store_true", help="a PR or patch; unsent unless --url is given")
+    s.add_argument("--move", choices=["me", "them", ""])
+    s.add_argument("--state")
+    item_fields(s, title=False)
+    s.set_defaults(fn=cmd_add)
+
+    s = sub.add_parser("set", help="change fields on an item")
+    s.add_argument("id")
+    s.add_argument("--state")
+    s.add_argument("--move", choices=["me", "them", ""])
+    s.add_argument("--log", help="also add this line to the history")
+    item_fields(s)
+    s.set_defaults(fn=cmd_set)
+
+    s = sub.add_parser("done", help="tick a to-do, or mark a PR merged (or --state closed)")
+    s.add_argument("id")
+    s.add_argument("--state", choices=["merged", "closed"])
+    s.add_argument("--log")
+    s.set_defaults(fn=cmd_done)
+
+    s = sub.add_parser("log", help="add a line to an item's history")
+    s.add_argument("id")
+    s.add_argument("text")
+    s.set_defaults(fn=cmd_log)
+
+    s = sub.add_parser("seen", help="clear the watcher's news on an item")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_seen)
+
+    s = sub.add_parser("rm", help="delete an item")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_rm)
+
+    s = sub.add_parser("areas", help="list areas, or edit one")
+    s.add_argument("name", nargs="?")
+    s.add_argument("--notes")
+    s.add_argument("--rename")
+    s.add_argument("--sort", type=int)
+    s.set_defaults(fn=cmd_areas)
+
+    s = sub.add_parser("check", help="have the site poll GitHub, GitLab and lore now")
+    s.set_defaults(fn=cmd_check)
+
+    s = sub.add_parser("watch", help="poll freedesktop GitLab and sourceware from here and report to the site")
+    s.set_defaults(fn=cmd_watch)
+
+    args = p.parse_args()
+    args.fn(args)
+
+
+if __name__ == "__main__":
+    main()
