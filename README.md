@@ -21,7 +21,19 @@ The token goes in `~/.config/personal/token` (or `$PERSONAL_TOKEN`). The rest go
 replies. `$PERSONAL_URL`, `$MY_EMAILS` (comma-separated) and `$FREEDESKTOP_USERNAME`
 override the file.
 
-With Nix, the flake's `packages.default` is the CLI.
+With Nix, the flake's `packages.default` is the CLI, and `homeManagerModules.default` installs
+it and writes the config file:
+
+```nix
+programs.personal = {
+  enable = true;
+  url = "https://example.com";
+  emails = [ "me@example.com" ];
+  freedesktopUsername = "me";
+};
+```
+
+The token stays out of the Nix store, so put it in place yourself.
 
 ## Use
 
