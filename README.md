@@ -43,7 +43,7 @@ personal ls --kind pr --area Fingerprint
 personal show voxtype#903                # by id, ref or URL
 personal add "Measure VRR on vs off" --area "VRR and PSR" --host helium
 personal add "drm: fix" --pr --notes "Branch foo, waiting on Sashiko"
-personal set 43 --state unsent               # reviewed, ready to send
+personal set 43 --state unsent           # reviewed, ready to send
 personal add "Fix the thing" --url https://github.com/o/r/pull/1 --move them
 personal set 42 --notes "..." --log "Rebased onto 7.3"
 personal done 42                         # to-do done, or PR merged (--state closed)
