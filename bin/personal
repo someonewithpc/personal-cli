@@ -165,7 +165,7 @@ def cmd_add(args):
     data = fields(args)
     data["kind"] = "pr" if args.pr or args.url else "todo"
     if args.pr and not args.url:
-        data.setdefault("state", "unsent")
+        data.setdefault("state", "review")
     item = call("POST", "/api/items", data)
     emit(args, item, lambda i: print(line(i)))
 
@@ -347,9 +347,9 @@ def main():
 
     s = sub.add_parser("add", help="add a to-do, or a PR with --pr/--url")
     s.add_argument("title")
-    s.add_argument("--pr", action="store_true", help="a PR or patch; unsent unless --url is given")
+    s.add_argument("--pr", action="store_true", help="a PR or patch; needs review unless --url or --state is given")
     s.add_argument("--move", choices=["me", "them", ""])
-    s.add_argument("--state")
+    s.add_argument("--state", help="review, unsent (ready to send), open, merged or closed")
     item_fields(s, title=False)
     s.set_defaults(fn=cmd_add)
 
