@@ -101,7 +101,7 @@ def line(i):
     if i.get("ref"):
         bits.append(i["ref"])
     bits.append(i["title"])
-    extra = [x for x in (i["area"], i["host"], i["due"] and f"due {i['due']}") if x]
+    extra = [x for x in (i["area"], i.get("theme"), i["host"], i["due"] and f"due {i['due']}") if x]
     if extra:
         bits.append("· " + ", ".join(extra))
     out = " ".join(bits)
@@ -125,7 +125,7 @@ def show(i):
 
 def fields(args):
     out = {}
-    for key in ("title", "notes", "area", "host", "due", "url", "state", "move"):
+    for key in ("title", "notes", "area", "theme", "host", "due", "url", "state", "move"):
         v = getattr(args, key, None)
         if v is not None:
             out[key] = v
@@ -328,6 +328,7 @@ def main():
             sp.add_argument("--title")
         sp.add_argument("--notes")
         sp.add_argument("--area")
+        sp.add_argument("--theme", help="where it sits on the PR map, like Kernel/amdgpu; empty to clear")
         sp.add_argument("--host")
         sp.add_argument("--due", help="YYYY-MM-DD, empty to clear")
         sp.add_argument("--priority", choices=PRIORITY)

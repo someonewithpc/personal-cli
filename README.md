@@ -46,11 +46,15 @@ personal add "drm: fix" --pr --notes "Branch foo, waiting on Sashiko"
 personal set 43 --state unsent           # reviewed, ready to send
 personal add "Fix the thing" --url https://github.com/o/r/pull/1 --move them
 personal set 42 --notes "..." --log "Rebased onto 7.3"
+personal set 42 --theme Kernel/amdgpu    # where it sits on the PR map
 personal done 42                         # to-do done, or PR merged (--state closed)
 personal seen 42
 personal check                           # make the site poll now
 personal watch                           # poll freedesktop GitLab and sourceware from here
 ```
+
+A theme is a path of any depth, split on `/`. The site's PR map groups PRs by it, then by
+repository.
 
 `--json` prints what the API returned. Every change is logged with who made it: the
 hostname, or `<host>/claude` inside Claude Code, or `$PERSONAL_AGENT`.
