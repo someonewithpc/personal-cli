@@ -190,6 +190,8 @@ def cmd_add(args):
         data.setdefault("state", "review")
     item = call("POST", "/api/items", data)
     emit(args, item, lambda i: print(line(i)))
+    if data["kind"] == "pr" and not args.theme:
+        print(f"personal: #{item['id']} has no theme, so the PR map puts it under No theme. Set one with --theme", file=sys.stderr)
 
 
 def cmd_set(args):
