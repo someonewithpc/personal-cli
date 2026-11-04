@@ -54,7 +54,8 @@ personal watch                           # poll freedesktop GitLab and sourcewar
 ```
 
 A theme is a path of any depth, split on `/`. The site's PR map groups PRs by it, then by
-repository.
+repository. `add` and `set` warn when a theme's top level isn't used by any other PR,
+since that starts a new bubble on the map, and suggest existing themes that look close.
 
 `--json` prints what the API returned. Every change is logged with who made it: the
 hostname, or `<host>/claude` inside Claude Code, or `$PERSONAL_AGENT`.

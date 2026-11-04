@@ -161,7 +161,29 @@ def cmd_show(args):
     emit(args, call("GET", item_path(args.id)), show)
 
 
+def check_theme(args):
+    """Warn about a theme whose top level no PR uses yet.
+
+    A typo or a dropped prefix, like Runtime Revolution for Work/Runtime Revolution,
+    starts a second bubble on the PR map.
+    """
+    if not args.theme:
+        return
+    themes = {i["theme"] for i in call("GET", "/api/items?kind=pr&all=1") if i.get("theme")}
+    tops = {t.split("/")[0] for t in themes}
+    top = args.theme.split("/")[0]
+    if top in tops:
+        return
+    msg = [f"personal: no other PR has a theme under {top!r}, so this starts a new bubble on the PR map"]
+    near = sorted(t for t in themes if top.lower() in t.lower())
+    if near:
+        msg.append("Did you mean " + " or ".join(near) + "?")
+    msg.append("In use: " + ", ".join(sorted(tops)))
+    print("\n".join(msg), file=sys.stderr)
+
+
 def cmd_add(args):
+    check_theme(args)
     data = fields(args)
     data["kind"] = "pr" if args.pr or args.url else "todo"
     if args.pr and not args.url:
@@ -171,6 +193,7 @@ def cmd_add(args):
 
 
 def cmd_set(args):
+    check_theme(args)
     data = fields(args)
     if args.log:
         data["log"] = args.log
