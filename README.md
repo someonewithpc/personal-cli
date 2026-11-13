@@ -47,6 +47,7 @@ personal set 43 --state unsent           # reviewed, ready to send
 personal add "Fix the thing" --url https://github.com/o/r/pull/1 --move them
 personal set 42 --notes "..." --log "Rebased onto 7.3"
 personal set 42 --theme Kernel/amdgpu    # where it sits on the PR map
+personal set 42 --kind pr                # a to-do that became a patch
 personal done 42                         # to-do done, or PR merged (--state closed)
 personal seen 42
 personal check                           # make the site poll now

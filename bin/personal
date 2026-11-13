@@ -197,6 +197,8 @@ def cmd_add(args):
 def cmd_set(args):
     check_theme(args)
     data = fields(args)
+    if args.kind:
+        data["kind"] = args.kind
     if args.log:
         data["log"] = args.log
     if not data:
@@ -383,6 +385,7 @@ def main():
     s.add_argument("id")
     s.add_argument("--state")
     s.add_argument("--move", choices=["me", "them", ""])
+    s.add_argument("--kind", choices=["todo", "pr"], help="turn a to-do into a PR or back, keeping its number")
     s.add_argument("--log", help="also add this line to the history")
     item_fields(s)
     s.set_defaults(fn=cmd_set)
