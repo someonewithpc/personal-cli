@@ -355,7 +355,7 @@ def main():
             sp.add_argument("--title")
         sp.add_argument("--notes")
         sp.add_argument("--area")
-        sp.add_argument("--theme", help="where it sits on the PR map, like Kernel/amdgpu; empty to clear")
+        sp.add_argument("--theme", help="where it sits on the PR map: an existing path like CAD/OCCT/Booleans or Kernel/amdgpu/eDP; empty to clear")
         sp.add_argument("--host")
         sp.add_argument("--due", help="YYYY-MM-DD, empty to clear")
         sp.add_argument("--priority", choices=PRIORITY)
