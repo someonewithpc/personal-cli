@@ -59,6 +59,11 @@ repository. `add` and `set` say when a theme starts a new group
 and suggest existing groups it may have meant: `OCTT` finds `CAD/OCCT`, `PSR` finds
 `Kernel/amdgpu/VRR and PSR`, and a title naming a group, like Sashiko, finds `Tools/Sashiko`.
 
+After `add`, it lists up to five items that may be the same work: ones sharing a commit hash,
+branch, worktree, URL or C/C++ name with the new item, or most of its title words. It also
+says which areas and themes those items use, when the new one differs. Read them, then merge
+a duplicate or move the new item.
+
 `--json` prints what the API returned. Every change is logged with who made it: the
 hostname, or `<host>/claude` inside Claude Code, or `$PERSONAL_AGENT`.
 

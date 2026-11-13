@@ -220,6 +220,63 @@ def theme_hints(theme, area, title, items, skip=None):
 
 STOP = set("""send review upstream patch patches series check make with from that this when
 into onto after before without about them their only once over fix fixes test tests""".split())
+HASH = re.compile(r"\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*[0-9])[0-9a-f]{8,40}\b")
+NAME = re.compile(r"\b[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+|::[A-Za-z_][A-Za-z0-9_]*)+\b|\b[a-z]+/[a-z0-9_]*-[a-z0-9_-]+\b(?!\.)|worktrees/[\w.-]+/[\w.-]+")
+
+
+def title_words(i):
+    return {w for w in re.findall(r"[a-z0-9_]{4,}", i["title"].lower()) if w not in STOP}
+
+
+def keys(i):
+    text = f"{i['title']}\n{i.get('notes') or ''}"
+    return set(HASH.findall(text)) | set(NAME.findall(text)) | ({i["url"]} if i.get("url") else set())
+
+
+def similar(new, items):
+    """Items that may be the same work as new, best first, each with why.
+
+    Commit hashes, branches, worktrees and C or C++ names shared with more than three items are
+    bases or common types, not a sign of the same work, so they don't count.
+    """
+    counts = {}
+    for i in items:
+        for k in keys(i):
+            counts[k] = counts.get(k, 0) + 1
+    mine, words = keys(new), title_words(new)
+    out = []
+    for i in items:
+        if i["id"] == new["id"]:
+            continue
+        shared = sorted(k for k in mine & keys(i) if counts.get(k, 0) <= 3)
+        common = words & title_words(i)
+        # One shared C++ name is weak; a shared commit, branch, worktree or URL is the same work
+        strong = sum(1 for k in shared if HASH.fullmatch(k) or "/" in k)
+        score = 3 * strong + (len(shared) - strong) + (len(common) / max(1, min(len(words), len(title_words(i)))) if len(common) >= 2 else 0)
+        if score >= 2:
+            why = []
+            if shared:
+                why.append("shares " + ", ".join(shared[:3]))
+            if len(common) >= 2:
+                why.append("title words " + ", ".join(sorted(common)))
+            out.append((score, i, "; ".join(why)))
+    out.sort(key=lambda x: -x[0])
+    return out[:5]
+
+
+def placement_hints(new, matches):
+    """Areas and themes the similar items sit in that new doesn't."""
+    out = []
+    areas = sorted({i["area"] for _, i, _ in matches if i["area"] and i["area"] != new["area"]})
+    if areas:
+        out.append("  Similar items are in area " + " or ".join(areas) + f", not {new['area'] or 'no area'!r}")
+    if new["kind"] == "pr":
+        themes = sorted({i["theme"] for _, i, _ in matches if i.get("theme") and i["theme"] != new.get("theme")})
+        if themes:
+            out.append("  Similar PRs have theme " + " or ".join(themes) + f", not {new.get('theme') or 'none'!r}")
+    return out
+
+
 def warn(lines):
     if lines:
         print("\n".join(lines), file=sys.stderr)
@@ -236,6 +293,11 @@ def cmd_add(args):
     hints = theme_hints(args.theme, args.area, args.title, items, skip=item["id"]) if data["kind"] == "pr" else []
     if data["kind"] == "pr" and not args.theme:
         hints.append(f"personal: #{item['id']} has no theme, so the PR map puts it under No theme. Set one with --theme")
+    matches = similar(item, items)
+    if matches:
+        hints.append(f"personal: #{item['id']} may duplicate or belong next to these. Check them, merge duplicates and fix its area or theme:")
+        hints += [f"  {line(i)}\n       {why}" for _, i, why in matches]
+        hints += placement_hints(item, matches)
     warn(hints)
 
 
