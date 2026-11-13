@@ -302,8 +302,10 @@ def cmd_add(args):
 
 
 def cmd_set(args):
+    cur = call("GET", item_path(args.id)) if args.theme or args.kind == "pr" else None
+    if args.kind == "pr" and not args.theme and not cur.get("theme"):
+        sys.exit(f"personal: #{cur['id']} has no theme, so the PR map would put it under No theme. Pass --theme with --kind pr")
     if args.theme:
-        cur = call("GET", item_path(args.id))
         warn(theme_hints(args.theme, args.area or cur["area"], args.title or cur["title"], all_items(), skip=cur["id"]))
     data = fields(args)
     if args.kind:
@@ -494,7 +496,7 @@ def main():
     s.add_argument("id")
     s.add_argument("--state")
     s.add_argument("--move", choices=["me", "them", ""])
-    s.add_argument("--kind", choices=["todo", "pr"], help="turn a to-do into a PR or back, keeping its number")
+    s.add_argument("--kind", choices=["todo", "pr"], help="turn a to-do into a PR or back, keeping its number. Needs --theme if the item has none")
     s.add_argument("--log", help="also add this line to the history")
     item_fields(s)
     s.set_defaults(fn=cmd_set)
