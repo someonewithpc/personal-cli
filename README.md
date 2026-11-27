@@ -48,6 +48,7 @@ personal add "Fix the thing" --url https://github.com/o/r/pull/1 --move them
 personal set 42 --notes "..." --log "Rebased onto 7.3"
 personal set 42 --theme Kernel/amdgpu/eDP # where it sits on the PR map
 personal set 42 --map hidden             # keep it off the PR map
+personal set 42 --map always             # keep a to-do on it once done
 personal set 42 --prs "51 hy3#344"       # a to-do for those PRs, which keeps it off the map
 personal set 42 --kind pr                # a to-do that became a patch
 personal done 42                         # to-do done, or PR merged
