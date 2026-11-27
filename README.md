@@ -53,6 +53,7 @@ personal set 42 --prs "51 hy3#344"       # a to-do for those PRs, which keeps it
 personal set 42 --kind pr                # a to-do that became a patch
 personal done 42                         # to-do done, or PR merged
 personal done 42 --state closed          # to-do not needed, or PR closed unmerged
+personal done 42 --state archived        # stop following a PR that's still open upstream
 personal seen 42
 personal check                           # make the site poll now
 personal watch                           # poll freedesktop GitLab and sourceware from here

@@ -324,8 +324,8 @@ def cmd_set(args):
 def cmd_done(args):
     cur = call("GET", item_path(args.id))
     state = args.state or ("done" if cur["kind"] == "todo" else "merged")
-    if cur["kind"] == "todo" and state == "merged":
-        sys.exit("personal: a to-do is done or closed, not merged")
+    if cur["kind"] == "todo" and state in ("merged", "archived"):
+        sys.exit(f"personal: a to-do is done or closed, not {state}")
     data = {"state": state}
     if args.log:
         data["log"] = args.log
@@ -484,7 +484,7 @@ def main():
     s.add_argument("--kind", choices=["todo", "pr"])
     s.add_argument("--area")
     s.add_argument("-s", "--search")
-    s.add_argument("--all", action="store_true", help="include done, merged and closed")
+    s.add_argument("--all", action="store_true", help="include done, merged, closed and archived")
     s.add_argument("--mine", action="store_true", help="only what needs me")
     s.set_defaults(fn=cmd_ls)
 
@@ -496,7 +496,7 @@ def main():
     s.add_argument("title")
     s.add_argument("--pr", action="store_true", help="a PR or patch; needs review unless --url or --state is given")
     s.add_argument("--move", choices=["me", "them", ""])
-    s.add_argument("--state", help="review, unsent (ready to send), open, merged or closed")
+    s.add_argument("--state", help="review, unsent (ready to send), open, merged, closed or archived")
     item_fields(s, title=False)
     s.set_defaults(fn=cmd_add)
 
@@ -509,9 +509,9 @@ def main():
     item_fields(s)
     s.set_defaults(fn=cmd_set)
 
-    s = sub.add_parser("done", help="tick a to-do, or mark a PR merged. --state closed closes either without it being done")
+    s = sub.add_parser("done", help="tick a to-do, or mark a PR merged. --state closed closes either without it being done, and --state archived drops a PR still open upstream from the lists, the map and polling")
     s.add_argument("id")
-    s.add_argument("--state", choices=["merged", "closed"])
+    s.add_argument("--state", choices=["merged", "closed", "archived"])
     s.add_argument("--log")
     s.set_defaults(fn=cmd_done)
 
