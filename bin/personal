@@ -95,8 +95,8 @@ def line(i):
     bits = [f"#{i['id']:<4}"]
     if i["kind"] == "pr":
         bits.append(f"[{i['state']}{', my move' if i['move'] == 'me' else ''}]")
-    elif i["state"] == "done":
-        bits.append("[done]")
+    elif i["state"] in ("done", "closed"):
+        bits.append(f"[{i['state']}]")
     if i["priority"] != 0:
         bits.append(f"({PRIORITY_NAME[i['priority']]})")
     if i.get("ref"):
@@ -321,7 +321,9 @@ def cmd_set(args):
 
 def cmd_done(args):
     cur = call("GET", item_path(args.id))
-    state = "done" if cur["kind"] == "todo" else args.state or "merged"
+    state = args.state or ("done" if cur["kind"] == "todo" else "merged")
+    if cur["kind"] == "todo" and state == "merged":
+        sys.exit("personal: a to-do is done or closed, not merged")
     data = {"state": state}
     if args.log:
         data["log"] = args.log
@@ -504,7 +506,7 @@ def main():
     item_fields(s)
     s.set_defaults(fn=cmd_set)
 
-    s = sub.add_parser("done", help="tick a to-do, or mark a PR merged (or --state closed)")
+    s = sub.add_parser("done", help="tick a to-do, or mark a PR merged. --state closed closes either without it being done")
     s.add_argument("id")
     s.add_argument("--state", choices=["merged", "closed"])
     s.add_argument("--log")

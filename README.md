@@ -49,7 +49,8 @@ personal set 42 --notes "..." --log "Rebased onto 7.3"
 personal set 42 --theme Kernel/amdgpu/eDP # where it sits on the PR map
 personal set 42 --map hidden             # keep it off the PR map
 personal set 42 --kind pr                # a to-do that became a patch
-personal done 42                         # to-do done, or PR merged (--state closed)
+personal done 42                         # to-do done, or PR merged
+personal done 42 --state closed          # to-do not needed, or PR closed unmerged
 personal seen 42
 personal check                           # make the site poll now
 personal watch                           # poll freedesktop GitLab and sourceware from here
