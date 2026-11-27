@@ -102,7 +102,7 @@ def line(i):
     if i.get("ref"):
         bits.append(i["ref"])
     bits.append(i["title"])
-    extra = [x for x in (i["area"], i.get("theme"), i.get("map_hidden") and "off the map", i["host"], i["due"] and f"due {i['due']}") if x]
+    extra = [x for x in (i["area"], i.get("theme"), i.get("prs") and "for " + " ".join(f"#{p}" for p in i["prs"]), i.get("map_hidden") and "off the map", i["host"], i["due"] and f"due {i['due']}") if x]
     if extra:
         bits.append("· " + ", ".join(extra))
     out = " ".join(bits)
@@ -134,6 +134,8 @@ def fields(args):
         out["priority"] = PRIORITY[args.priority]
     if getattr(args, "map", None):
         out["map_hidden"] = int(args.map == "hidden")
+    if getattr(args, "prs", None) is not None:
+        out["prs"] = args.prs
     return out
 
 
@@ -472,6 +474,7 @@ def main():
         sp.add_argument("--area")
         sp.add_argument("--theme", help="where it sits on the PR map: an existing path like CAD/OCCT/Booleans or Kernel/amdgpu/eDP; empty to clear")
         sp.add_argument("--map", choices=["shown", "hidden"], help="whether it shows on the PR map. Open to-dos show by default")
+        sp.add_argument("--prs", metavar="PRS", help="the PRs a to-do is part of, as ids, refs or URLs split by spaces or commas. It replaces the list, and none clears it")
         sp.add_argument("--host")
         sp.add_argument("--due", help="YYYY-MM-DD, empty to clear")
         sp.add_argument("--priority", choices=PRIORITY)

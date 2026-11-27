@@ -48,6 +48,7 @@ personal add "Fix the thing" --url https://github.com/o/r/pull/1 --move them
 personal set 42 --notes "..." --log "Rebased onto 7.3"
 personal set 42 --theme Kernel/amdgpu/eDP # where it sits on the PR map
 personal set 42 --map hidden             # keep it off the PR map
+personal set 42 --prs "51 hy3#344"       # a to-do for those PRs, which keeps it off the map
 personal set 42 --kind pr                # a to-do that became a patch
 personal done 42                         # to-do done, or PR merged
 personal done 42 --state closed          # to-do not needed, or PR closed unmerged
@@ -57,7 +58,7 @@ personal watch                           # poll freedesktop GitLab and sourcewar
 ```
 
 A theme is a path of any depth, split on `/`. The site's PR map groups PRs by it, then by
-repository. Open to-dos show on it too, under their theme or else their area. `add` and `set` say when a theme starts a new group
+repository. Open to-dos show on it too, under their theme or else their area, unless they're part of a PR. `add` and `set` say when a theme starts a new group
 and suggest existing groups it may have meant: `OCTT` finds `CAD/OCCT`, `PSR` finds
 `Kernel/amdgpu/VRR and PSR`, and a title naming a group, like Sashiko, finds `Tools/Sashiko`.
 
